@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日历与提醒事项</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- ───── 顶部栏 ───── -->
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="切换侧栏">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="app-tabs">
+      <button class="tab-btn active" data-tab="calendar">📅 日历</button>
+      <button class="tab-btn" data-tab="reminders">🔔 提醒事项</button>
+    </nav>
+  </div>
+  <div class="topbar-center" id="headerTitle">
+    <button class="nav-arrow" id="prevBtn" aria-label="上一页">&#8249;</button>
+    <h1 class="current-period" id="currentPeriod">2026年5月</h1>
+    <button class="nav-arrow" id="nextBtn" aria-label="下一页">&#8250;</button>
+  </div>
+  <div class="topbar-right">
+    <button class="today-btn" id="todayBtn">今天</button>
+    <div class="view-switcher" id="viewSwitcher">
+      <button class="view-btn active" data-view="month">月</button>
+      <button class="view-btn" data-view="week">周</button>
+      <button class="view-btn" data-view="day">日</button>
+    </div>
+    <button class="icon-btn" id="searchBtn" aria-label="搜索">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="syncBtn" aria-label="同步" title="立即同步">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+        <path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+        <path d="M16 16h5v5"/>
+      </svg>
+    </button>
+    <button class="icon-btn theme-toggle" id="themeToggle" aria-label="切换深浅色">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"/>
+        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ───── 搜索框（隐藏） ───── -->
+<div class="search-bar" id="searchBar">
+  <input type="text" class="search-input" id="searchInput" placeholder="搜索事件和提醒…">
+  <button class="search-close" id="searchClose">取消</button>
+</div>
+
+<!-- ───── 主体 ───── -->
+<div class="app-body">
+
+  <!-- ── 侧栏 ── -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- 迷你日历 -->
+    <div class="mini-cal" id="miniCal">
+      <div class="mini-cal-header">
+        <button class="mini-nav" id="miniPrev">&#8249;</button>
+        <span class="mini-title" id="miniTitle"></span>
+        <button class="mini-nav" id="miniNext">&#8250;</button>
+      </div>
+      <div class="mini-cal-grid">
+        <span class="mini-dow">日</span><span class="mini-dow">一</span>
+        <span class="mini-dow">二</span><span class="mini-dow">三</span>
+        <span class="mini-dow">四</span><span class="mini-dow">五</span>
+        <span class="mini-dow">六</span>
+      </div>
+      <div class="mini-cal-days" id="miniDays"></div>
+    </div>
+
+    <!-- 我的日历 -->
+    <div class="sidebar-section" id="calendarSection">
+      <div class="sidebar-section-header" data-toggle="calendarList">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <span>我的日历</span>
+      </div>
+      <ul class="sidebar-list" id="calendarList"></ul>
+    </div>
+
+    <!-- 提醒事项列表 -->
+    <div class="sidebar-section" id="remindersSection">
+      <div class="sidebar-section-header" data-toggle="remindersList">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <span>提醒事项</span>
+      </div>
+      <ul class="sidebar-list" id="remindersList"></ul>
+    </div>
+
+    <!-- 同步状态 -->
+    <div class="sync-status" id="syncStatus">
+      <span class="sync-dot"></span>
+      <span class="sync-label">已同步</span>
+    </div>
+  </aside>
+
+  <!-- ── 日历视图 ── -->
+  <main class="main-content" id="mainContent">
+
+    <!-- 月视图 -->
+    <section class="view month-view active" id="monthView">
+      <div class="month-grid-header">
+        <span>日</span><span>一</span><span>二</span>
+        <span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div class="month-grid" id="monthGrid"></div>
+    </section>
+
+    <!-- 周视图 -->
+    <section class="view week-view" id="weekView">
+      <div class="week-header" id="weekHeader"></div>
+      <div class="week-body">
+        <div class="time-gutter" id="timeGutter"></div>
+        <div class="week-columns" id="weekColumns"></div>
+      </div>
+    </section>
+
+    <!-- 日视图 -->
+    <section class="view day-view" id="dayView">
+      <div class="day-header" id="dayHeader"></div>
+      <div class="day-body">
+        <div class="time-gutter" id="dayTimeGutter"></div>
+        <div class="day-column" id="dayColumn"></div>
+      </div>
+    </section>
+
+    <!-- 提醒事项视图 -->
+    <section class="view reminders-view" id="remindersView">
+      <div class="reminders-layout">
+        <div class="reminders-main" id="remindersMain">
+          <div class="reminders-list-header">
+            <h2 class="reminders-list-title" id="remindersListTitle">提醒事项</h2>
+            <span class="reminders-count" id="remindersCount"></span>
+          </div>
+          <ul class="reminders-items" id="remindersItems"></ul>
+          <div class="new-reminder-row">
+            <button class="add-reminder-btn" id="addReminderBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/>
+              </svg>
+              新建提醒
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ───── 新建事件弹窗 ───── -->
+<div class="modal-overlay" id="eventModal">
+  <div class="modal event-modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="eventModalTitle">新建事件</h2>
+      <button class="modal-close" id="eventModalClose" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="modal-input title-input" id="eventTitle" placeholder="事件名称">
+      <div class="modal-row">
+        <label>全天</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="eventAllDay">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="modal-row" id="timeRow">
+        <div class="time-group">
+          <label>开始</label>
+          <input type="datetime-local" class="modal-input" id="eventStart">
+        </div>
+        <div class="time-group">
+          <label>结束</label>
+          <input type="datetime-local" class="modal-input" id="eventEnd">
+        </div>
+      </div>
+      <input type="text" class="modal-input" id="eventLocation" placeholder="位置">
+      <textarea class="modal-input" id="eventDesc" placeholder="备注" rows="3"></textarea>
+      <div class="modal-row">
+        <label>日历</label>
+        <select class="modal-select" id="eventCalendar"></select>
+      </div>
+      <div class="modal-row">
+        <label>颜色</label>
+        <div class="color-picker" id="eventColorPicker">
+          <span class="color-dot active" data-color="#007AFF" style="background:#007AFF"></span>
+          <span class="color-dot" data-color="#34C759" style="background:#34C759"></span>
+          <span class="color-dot" data-color="#FF9500" style="background:#FF9500"></span>
+          <span class="color-dot" data-color="#FF3B30" style="background:#FF3B30"></span>
+          <span class="color-dot" data-color="#AF52DE" style="background:#AF52DE"></span>
+          <span class="color-dot" data-color="#FF2D55" style="background:#FF2D55"></span>
+          <span class="color-dot" data-color="#5AC8FA" style="background:#5AC8FA"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="eventModalCancel">取消</button>
+      <button class="btn-primary" id="eventModalSave">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ───── 事件详情弹窗 ───── -->
+<div class="modal-overlay" id="eventDetailModal">
+  <div class="modal event-detail-modal">
+    <div class="modal-header" id="detailHeader">
+      <div class="detail-color-bar" id="detailColorBar"></div>
+      <div class="modal-header-actions">
+        <button class="icon-btn" id="editEventBtn" aria-label="编辑">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="icon-btn danger" id="deleteEventBtn" aria-label="删除">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
+        <button class="modal-close" id="detailModalClose" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal-body detail-body">
+      <h2 class="detail-title" id="detailTitle"></h2>
+      <p class="detail-time" id="detailTime"></p>
+      <p class="detail-location" id="detailLocation"></p>
+      <p class="detail-desc" id="detailDesc"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ───── 新建提醒弹窗 ───── -->
+<div class="modal-overlay" id="reminderModal">
+  <div class="modal reminder-modal">
+    <div class="modal-header">
+      <h2 class="modal-title">新建提醒</h2>
+      <button class="modal-close" id="reminderModalClose" aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="modal-input title-input" id="reminderTitle" placeholder="提醒标题">
+      <textarea class="modal-input" id="reminderNotes" placeholder="备注" rows="2"></textarea>
+      <div class="modal-row">
+        <label>截止日期</label>
+        <input type="datetime-local" class="modal-input" id="reminderDue">
+      </div>
+      <div class="modal-row">
+        <label>优先级</label>
+        <select class="modal-select" id="reminderPriority">
+          <option value="0">无</option>
+          <option value="1" selected>普通</option>
+          <option value="2">高</option>
+        </select>
+      </div>
+      <div class="modal-row">
+        <label>列表</label>
+        <select class="modal-select" id="reminderList"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="reminderModalCancel">取消</button>
+      <button class="btn-primary" id="reminderModalSave">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ───── Toast 提示 ───── -->
+<div class="toast" id="toast"></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
