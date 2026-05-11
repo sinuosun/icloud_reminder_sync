@@ -17,12 +17,14 @@ _sync_thread = None
 def _sync_loop():
     print(f"[Scheduler] 启动，每 {INTERVAL//60} 分钟同步一次")
     while not _stop_event.is_set():
-        sync_all()
-        # 分段等待，方便快速响应停止信号
+        # 启动时 bootstrap 已经同步一次；后台线程先等待，避免开机连续同步两遍。
         for _ in range(INTERVAL):
             if _stop_event.is_set():
                 break
             time.sleep(1)
+        if _stop_event.is_set():
+            break
+        sync_all()
     print("[Scheduler] 已停止")
 
 def start():

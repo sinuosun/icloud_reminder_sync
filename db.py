@@ -77,6 +77,37 @@ def init_db():
 
 # ─── Events ───────────────────────────────────────────
 
+def _dt_key(value: str) -> str:
+    """把不同来源的时间字符串规整成本地 ISO 字符串，用于稳定比较。"""
+    if not value:
+        return ''
+    text = str(value).strip()
+    if not text:
+        return ''
+
+    iso = text.replace(' ', 'T')
+    if iso.endswith('Z'):
+        iso = iso[:-1] + '+00:00'
+    try:
+        parsed = datetime.fromisoformat(iso)
+        return parsed.replace(tzinfo=None, microsecond=0).isoformat()
+    except Exception:
+        pass
+
+    for fmt in (
+        '%Y-%m-%d %H:%M:%S',
+        '%Y/%m/%d %H:%M:%S',
+        '%m/%d/%Y %H:%M:%S',
+        '%m/%d/%Y %I:%M:%S %p',
+        '%Y-%m-%dT%H:%M:%S',
+    ):
+        try:
+            return datetime.strptime(text, fmt).replace(microsecond=0).isoformat()
+        except Exception:
+            continue
+
+    return iso[:19]
+
 def upsert_event(event: dict):
     conn = get_conn()
     conn.execute('''
@@ -96,17 +127,37 @@ def upsert_event(event: dict):
 
 def get_events(start: str, end: str):
     conn = get_conn()
-    rows = conn.execute('''
-        SELECT * FROM events
-        WHERE start_time >= ? AND start_time <= ?
-        ORDER BY start_time ASC
-    ''', (start, end)).fetchall()
+    rows = conn.execute('SELECT * FROM events').fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+
+    start_key = _dt_key(start)
+    end_key = _dt_key(end)
+    events = []
+    for row in rows:
+        event = dict(row)
+        event_key = _dt_key(event.get('start_time', ''))
+        if start_key and event_key < start_key:
+            continue
+        if end_key and event_key > end_key:
+            continue
+        event['start_time'] = event_key
+        event['end_time'] = _dt_key(event.get('end_time', ''))
+        events.append(event)
+
+    return sorted(events, key=lambda e: e.get('start_time') or '')
 
 def delete_event(event_id: str):
     conn = get_conn()
     conn.execute('DELETE FROM events WHERE id = ?', (event_id,))
+    conn.commit()
+    conn.close()
+
+def clear_events(source: str = None):
+    conn = get_conn()
+    if source:
+        conn.execute('DELETE FROM events WHERE source = ?', (source,))
+    else:
+        conn.execute('DELETE FROM events')
     conn.commit()
     conn.close()
 

@@ -58,9 +58,24 @@ def api_calendars():
 @app.route('/api/events')
 def api_events():
     # 默认返回当月前后3个月
-    start = request.args.get('start',
+    def _normalize_iso(value: str) -> str:
+        if not value:
+            return ''
+        try:
+            iso = value.strip()
+            if iso.endswith('Z'):
+                iso = iso[:-1] + '+00:00'
+            dt = datetime.fromisoformat(iso)
+            if dt.tzinfo is not None:
+                local_tz = datetime.now().astimezone().tzinfo
+                dt = dt.astimezone(local_tz).replace(tzinfo=None)
+            return dt.replace(microsecond=0).isoformat()
+        except Exception:
+            return value
+
+    start = _normalize_iso(request.args.get('start') or
         (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00'))
-    end   = request.args.get('end',
+    end   = _normalize_iso(request.args.get('end') or
         (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59'))
     return jsonify(get_events(start, end))
 

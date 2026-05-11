@@ -3,4 +3,5 @@ config.json
 venv/
 __pycache__/
 .codex-marketplaces/
+calendar.db
 *.pyc
