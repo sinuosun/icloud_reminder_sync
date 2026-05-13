@@ -18,6 +18,8 @@ const state = {
   draft: null,
   defaultCalendarId: '',
   loadedRange: null,
+  gotoCursor: new Date(),
+  gotoSelected: new Date(),
 };
 
 const $ = id => document.getElementById(id);
@@ -54,6 +56,9 @@ function bindChrome() {
   };
   $('quickAddBtn').onclick = () => openQuickDraft();
   $('sidebarAddBtn').onclick = () => openQuickDraft();
+  $('sidebarCollapseBtn').onclick = () => {
+    $('sidebar').classList.toggle('collapsed');
+  };
 
   $('syncBtn').onclick = async () => {
     const btn = $('syncBtn');
@@ -77,15 +82,53 @@ function bindChrome() {
   $('sidebarMenuBtn').onclick = event => {
     const menu = $('sidebarMenu');
     const rect = event.currentTarget.getBoundingClientRect();
-    menu.style.left = `${rect.left + 10}px`;
+    menu.style.left = `${rect.left + rect.width / 2 - 7}px`;
     menu.style.top = `${rect.bottom + 8}px`;
+    menu.style.transformOrigin = '7px 0';
     menu.classList.toggle('open');
   };
 
+  $('gotoDateBtn').onclick = event => {
+    event.stopPropagation();
+    $('sidebarMenu').classList.remove('open');
+    openGotoDateModal();
+  };
+  $('gotoDateClose').onclick = closeGotoDateModal;
+  $('gotoDateModal').onclick = event => {
+    if (event.target === $('gotoDateModal')) closeGotoDateModal();
+  };
+  $('gotoPrevMonth').onclick = () => {
+    state.gotoCursor.setMonth(state.gotoCursor.getMonth() - 1);
+    renderGotoCalendar();
+  };
+  $('gotoNextMonth').onclick = () => {
+    state.gotoCursor.setMonth(state.gotoCursor.getMonth() + 1);
+    renderGotoCalendar();
+  };
+  $('gotoDateInput').oninput = event => {
+    const date = parseDateInput(event.target.value);
+    if (!date) return;
+    state.gotoSelected = date;
+    state.gotoCursor = new Date(date);
+    renderGotoCalendar();
+  };
+  $('gotoConfirm').onclick = jumpToGotoDate;
+
   document.addEventListener('mousedown', event => {
-    if (!event.target.closest('.popover') && !event.target.closest('.context-menu') && !event.target.closest('.time-event') && !event.target.closest('.month-event')) {
+    if (!event.target.closest('.popover') && !event.target.closest('.context-menu') && !event.target.closest('.goto-dialog') && !event.target.closest('.time-event') && !event.target.closest('.month-event')) {
       closePopover();
       $('sidebarMenu').classList.remove('open');
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      closePopover();
+      closeGotoDateModal();
+      $('sidebarMenu').classList.remove('open');
+    }
+    if (event.key === 'Enter' && $('gotoDateModal').classList.contains('open')) {
+      jumpToGotoDate();
     }
   });
 
@@ -119,7 +162,8 @@ function render() {
 }
 
 function updatePeriodTitle() {
-  const month = `${state.cursor.getMonth() + 1}月`;
+  const months = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+  const month = months[state.cursor.getMonth()];
   $('periodTitle').innerHTML = `${state.cursor.getFullYear()}年 <strong>${month}</strong>`;
 }
 
@@ -442,6 +486,68 @@ function positionPopover(popover, x, y) {
 
 function closePopover() {
   $('eventPopover').classList.remove('open');
+}
+
+function openGotoDateModal() {
+  state.gotoSelected = new Date(state.cursor);
+  state.gotoCursor = new Date(state.cursor);
+  $('gotoDateInput').value = formatGotoInput(state.gotoSelected);
+  renderGotoCalendar();
+  $('gotoDateModal').classList.add('open');
+  setTimeout(() => $('gotoDateInput').focus(), 120);
+}
+
+function closeGotoDateModal() {
+  $('gotoDateModal').classList.remove('open');
+}
+
+function renderGotoCalendar() {
+  const cursor = state.gotoCursor;
+  $('gotoMonthTitle').textContent = `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`;
+
+  const grid = $('gotoGrid');
+  grid.innerHTML = '';
+  ['一', '二', '三', '四', '五', '六', '日'].forEach(day => {
+    const cell = document.createElement('span');
+    cell.className = 'goto-dow';
+    cell.textContent = day;
+    grid.appendChild(cell);
+  });
+
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const mondayIndex = (first.getDay() + 6) % 7;
+  const start = addDays(first, -mondayIndex);
+
+  for (let index = 0; index < 42; index++) {
+    const date = addDays(start, index);
+    const dateStr = fmtDate(date);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = [
+      'goto-day',
+      date.getMonth() !== cursor.getMonth() ? 'other' : '',
+      dateStr === fmtDate(state.today) ? 'today' : '',
+      dateStr === fmtDate(state.gotoSelected) ? 'selected' : '',
+    ].filter(Boolean).join(' ');
+    button.textContent = date.getDate();
+    button.onclick = () => {
+      state.gotoSelected = new Date(date);
+      $('gotoDateInput').value = formatGotoInput(date);
+      renderGotoCalendar();
+    };
+    button.ondblclick = jumpToGotoDate;
+    grid.appendChild(button);
+  }
+}
+
+async function jumpToGotoDate() {
+  const typed = parseDateInput($('gotoDateInput').value);
+  if (typed) state.gotoSelected = typed;
+  state.cursor = new Date(state.gotoSelected);
+  closeGotoDateModal();
+  await loadEventsForCursor(true);
+  render();
+  scrollToWorkingHour();
 }
 
 function eventDetailHtml(event, inPanel) {
@@ -797,6 +903,36 @@ function clamp(value, min, max) {
 
 function fmtDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function parseDateInput(value) {
+  if (!value) return null;
+  const text = value.trim();
+  let year;
+  let month;
+  let day;
+
+  let match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(text);
+  if (match) {
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  } else {
+    match = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(text);
+    if (!match) return null;
+    month = Number(match[1]);
+    day = Number(match[2]);
+    year = Number(match[3]);
+  }
+
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return date;
+}
+
+function formatGotoInput(date) {
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
 function weekStart(date) {
