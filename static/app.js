@@ -515,10 +515,12 @@ function renderGotoCalendar() {
   });
 
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
   const mondayIndex = (first.getDay() + 6) % 7;
   const start = addDays(first, -mondayIndex);
+  const totalCells = Math.ceil((mondayIndex + last.getDate()) / 7) * 7;
 
-  for (let index = 0; index < 42; index++) {
+  for (let index = 0; index < totalCells; index++) {
     const date = addDays(start, index);
     const dateStr = fmtDate(date);
     const button = document.createElement('button');
