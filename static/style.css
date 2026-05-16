@@ -291,6 +291,15 @@ button { border: 0; background: none; color: inherit; cursor: pointer; }
   font-weight: 860;
   margin-left: 7px;
 }
+.reminders-mode .period-row {
+  display: none;
+}
+.reminders-mode .topbar-center,
+.reminders-mode .nav-btn,
+.reminders-mode .today-btn {
+  opacity: .38;
+  pointer-events: none;
+}
 .calendar-view { display: none; min-height: 0; flex: 1; }
 .calendar-view.active { display: flex; }
 
@@ -562,6 +571,187 @@ button { border: 0; background: none; color: inherit; cursor: pointer; }
   font-weight: 500;
 }
 
+.reminders-view {
+  padding: 0 34px 34px;
+  overflow: hidden;
+}
+.reminders-page {
+  width: min(840px, 100%);
+  margin: 8px auto 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.reminders-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 24px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.reminders-kicker {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.reminders-header h1 {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -.045em;
+  color: #f8f8fb;
+}
+.reminders-add {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #1b1c1f;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 850;
+  line-height: 1;
+  box-shadow: 0 7px 22px rgba(255,69,63,.28);
+}
+.reminder-list-tabs {
+  display: flex;
+  gap: 9px;
+  padding: 16px 0 10px;
+  overflow-x: auto;
+}
+.reminder-list-tabs button {
+  height: 31px;
+  border-radius: 999px;
+  padding: 0 13px;
+  color: #d7d8de;
+  background: #2a2b30;
+  font-size: 13px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+.reminder-list-tabs button.active {
+  background: rgba(255,69,63,.18);
+  color: #ffb0ac;
+}
+.reminder-list-tabs span {
+  margin-left: 5px;
+  color: var(--faint);
+}
+.new-reminder-form {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 205px auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 10px;
+  margin: 4px 0 12px;
+  border-radius: 14px;
+  background: #222327;
+  border: 1px solid var(--line-soft);
+}
+.new-reminder-form input {
+  min-width: 0;
+  height: 35px;
+  border: 0;
+  outline: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 8px;
+}
+.new-reminder-form input:focus {
+  background: rgba(255,255,255,.055);
+}
+.reminders-list-view {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 18px;
+  overflow-y: auto;
+}
+.reminder-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  min-height: 58px;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.reminder-row:hover {
+  background: rgba(255,255,255,.035);
+  border-radius: 12px;
+}
+.reminder-check {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid var(--red);
+  color: var(--red);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 900;
+}
+.reminder-check.draft {
+  pointer-events: none;
+  opacity: .72;
+}
+.reminder-main {
+  min-width: 0;
+}
+.reminder-title {
+  color: #fbfbfd;
+  font-size: 17px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+.reminder-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.reminder-notes {
+  margin-top: 7px;
+  color: #c6c7ce;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.reminder-delete {
+  align-self: center;
+  color: rgba(255,69,63,.86);
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.reminder-row:hover .reminder-delete {
+  opacity: 1;
+}
+.reminder-row.completed {
+  opacity: .48;
+}
+.reminder-row.completed .reminder-title {
+  text-decoration: line-through;
+}
+.reminders-empty {
+  display: none;
+  margin-top: 70px;
+  text-align: center;
+  color: var(--faint);
+  font-weight: 650;
+}
+.reminders-empty.show {
+  display: block;
+}
+.reminder-dot {
+  border-radius: 50%;
+}
+
 .popover, .context-menu {
   position: fixed;
   z-index: 50;
@@ -644,7 +834,6 @@ button { border: 0; background: none; color: inherit; cursor: pointer; }
 }
 .danger .menu-icon { color: rgba(255,69,63,.7); }
 .danger .menu-icon svg { stroke-width: 1.55; }
-}
 @keyframes menu-pop {
   0% { opacity: 0; transform: scale(.58); filter: blur(1px); }
   62% { opacity: 1; transform: scale(1.035); }

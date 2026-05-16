@@ -38,7 +38,7 @@
             </g>
           </svg>
         </button>
-        <button class="mode-icon mail-icon" aria-label="邮件">
+        <button class="mode-icon mail-icon" id="remindersModeBtn" aria-label="提醒事项" title="提醒事项">
           <svg viewBox="0 0 115.092041015625 83.4892578125" aria-hidden="true">
             <g transform="matrix(1 0 0 1 -12.458950195312582 76.974609375)">
               <path d="M27.7789 6.51468L112.233 6.51468C122.465 6.51468 127.551 1.4077 127.551-8.648L127.551-37.5484C127.551-41.9861 126.97-44.1321 124.813-46.8177L107.915-67.6802C102.19-74.7232 99.7081-76.8903 91.0146-76.8903L48.9971-76.8903C40.3553-76.8903 37.8219-74.7232 32.0969-67.6802L15.2501-46.8177C13.0935-44.1321 12.4609-41.9861 12.4609-37.5484L12.4609-8.648C12.4609 1.4288 17.5986 6.51468 27.7789 6.51468ZM27.9035-1.39054C23.0272-1.39054 20.3144-3.99979 20.3144-9.03137L20.3144-33.3257L51.2597-33.3257C52.4605-24.2061 60.123-17.4983 70.0265-17.4983C79.9405-17.4983 87.5512-24.2789 88.7521-33.3257L119.697-33.3257L119.697-9.03137C119.697-3.99979 116.942-1.39054 112.108-1.39054ZM70.0265-24.7096C63.1182-24.7096 58.6684-30.6908 58.6684-36.3686L58.6684-36.5354C58.6684-38.5472 57.4867-40.4852 54.9467-40.4852L22.7508-40.4852C21.155-40.4852 20.8128-41.8635 21.6419-42.9312L39.7539-65.7527C42.1733-68.7951 44.8725-69.9895 48.4364-69.9895L91.5753-69.9895C95.1393-69.9895 97.8902-68.7951 100.31-65.7527L118.432-42.9312C119.209-41.8635 118.867-40.4852 117.323-40.4852L85.065-40.4852C82.5768-40.4852 81.3433-38.5472 81.3433-36.5354L81.3433-36.3686C81.3433-30.6908 76.9453-24.7096 70.0265-24.7096Z"></path>
@@ -97,6 +97,27 @@
           <span>周四</span><span>周五</span><span>周六</span>
         </div>
         <div class="month-grid" id="monthGrid"></div>
+      </section>
+
+      <section class="calendar-view reminders-view" id="remindersView">
+        <div class="reminders-page">
+          <header class="reminders-header">
+            <div>
+              <p class="reminders-kicker" id="remindersKicker">Outlook Tasks</p>
+              <h1 id="remindersTitle">提醒事项</h1>
+            </div>
+            <button class="reminders-add" id="newReminderBtn" type="button" title="新建提醒">＋</button>
+          </header>
+          <div class="reminder-list-tabs" id="reminderListTabs"></div>
+          <form class="new-reminder-form" id="newReminderForm">
+            <button class="reminder-check draft" type="button" aria-hidden="true"></button>
+            <input id="newReminderTitle" type="text" placeholder="新建提醒事项" autocomplete="off">
+            <input id="newReminderDue" type="datetime-local" title="截止时间">
+            <button class="btn primary" type="submit">添加</button>
+          </form>
+          <ul class="reminders-list-view" id="remindersListView"></ul>
+          <div class="reminders-empty" id="remindersEmpty">没有待办提醒。小狐狸今天可以喘口气。</div>
+        </div>
       </section>
     </main>
   </div>

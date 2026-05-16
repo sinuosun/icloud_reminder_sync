@@ -8,11 +8,15 @@ const COLORS = {
 };
 
 const state = {
+  mode: 'calendar',
   view: 'day',
   today: new Date(),
   cursor: new Date(),
   events: [],
   calendars: [],
+  reminderLists: [],
+  reminders: [],
+  activeReminderList: '',
   visibleCalendars: new Set(),
   selectedEvent: null,
   draft: null,
@@ -27,8 +31,8 @@ const $$ = sel => [...document.querySelectorAll(sel)];
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindChrome();
-  await loadCalendars();
-  await loadEventsForCursor();
+  await Promise.all([loadCalendars(), loadReminderLists()]);
+  await Promise.all([loadEventsForCursor(), loadReminders()]);
   render();
   scrollToWorkingHour();
 });
@@ -54,11 +58,21 @@ function bindChrome() {
     render();
     scrollToWorkingHour();
   };
-  $('quickAddBtn').onclick = () => openQuickDraft();
-  $('sidebarAddBtn').onclick = () => openQuickDraft();
+  $('quickAddBtn').onclick = () => {
+    if (state.mode === 'reminders') focusNewReminder();
+    else openQuickDraft();
+  };
+  $('sidebarAddBtn').onclick = () => {
+    if (state.mode === 'reminders') focusNewReminder();
+    else openQuickDraft();
+  };
   $('sidebarCollapseBtn').onclick = () => {
     $('sidebar').classList.toggle('collapsed');
   };
+  $('sidebarCollapseBtn').ondblclick = () => switchMode('calendar');
+  $('remindersModeBtn').onclick = () => switchMode(state.mode === 'reminders' ? 'calendar' : 'reminders');
+  $('newReminderBtn').onclick = focusNewReminder;
+  $('newReminderForm').onsubmit = createReminderFromForm;
 
   $('syncBtn').onclick = async () => {
     const btn = $('syncBtn');
@@ -67,7 +81,7 @@ function bindChrome() {
     try {
       await api('POST', '/api/sync');
       await new Promise(resolve => setTimeout(resolve, 900));
-      await loadEventsForCursor(true);
+      await Promise.all([loadEventsForCursor(true), loadReminderLists(), loadReminders()]);
       render();
       setSyncStatus('ok', '已同步');
       toast('同步完成');
@@ -137,7 +151,19 @@ function bindChrome() {
   });
 }
 
+async function switchMode(mode) {
+  state.mode = mode;
+  state.draft = null;
+  state.selectedEvent = null;
+  closePopover();
+  $('sidebarMenu').classList.remove('open');
+  if (mode === 'reminders') await loadReminders();
+  render();
+  if (mode === 'calendar') scrollToWorkingHour();
+}
+
 async function shiftCursor(direction) {
+  if (state.mode === 'reminders') return;
   const next = new Date(state.cursor);
   if (state.view === 'month') next.setMonth(next.getMonth() + direction);
   if (state.view === 'week') next.setDate(next.getDate() + direction * 7);
@@ -151,9 +177,17 @@ async function shiftCursor(direction) {
 }
 
 function render() {
-  updatePeriodTitle();
   renderSidebar();
+  updateChromeMode();
   $$('.calendar-view').forEach(view => view.classList.remove('active'));
+
+  if (state.mode === 'reminders') {
+    $('remindersView').classList.add('active');
+    renderReminders();
+    return;
+  }
+
+  updatePeriodTitle();
   $(`${state.view}View`).classList.add('active');
 
   if (state.view === 'day') renderDay();
@@ -167,9 +201,48 @@ function updatePeriodTitle() {
   $('periodTitle').innerHTML = `${state.cursor.getFullYear()}年 <strong>${month}</strong>`;
 }
 
+function updateChromeMode() {
+  const isReminders = state.mode === 'reminders';
+  document.body.classList.toggle('reminders-mode', isReminders);
+  $('remindersModeBtn').classList.toggle('active', isReminders);
+  $('sidebarCollapseBtn').classList.toggle('active', !isReminders);
+  if (isReminders) $('periodTitle').textContent = '';
+  $$('.seg-btn').forEach(btn => btn.disabled = isReminders);
+  $('prevBtn').disabled = isReminders;
+  $('nextBtn').disabled = isReminders;
+  $('todayBtn').disabled = isReminders;
+  $('quickAddBtn').title = isReminders ? '新建提醒' : '新建日程';
+}
+
 function renderSidebar() {
   const list = $('calendarList');
   list.innerHTML = '';
+  const sidebarTitle = document.querySelector('.sidebar-title-row h2');
+
+  if (state.mode === 'reminders') {
+    if (sidebarTitle) sidebarTitle.textContent = '提醒事项';
+    state.reminderLists.forEach(reminderList => {
+      const active = !state.activeReminderList || state.activeReminderList === reminderList.id;
+      const li = document.createElement('li');
+      li.className = `calendar-item reminder-source ${active ? 'active' : ''}`;
+      li.innerHTML = `
+        <span class="cal-check reminder-dot" style="background:${reminderList.color || COLORS.work}"></span>
+        <span>${esc(displayReminderListName(reminderList))}</span>
+      `;
+      li.onclick = async () => {
+        state.activeReminderList = active ? '' : reminderList.id;
+        await loadReminders();
+        render();
+      };
+      list.appendChild(li);
+    });
+    if (!state.reminderLists.length) {
+      list.innerHTML = '<li class="calendar-item reminder-source active"><span class="cal-check reminder-dot"></span><span>Outlook Tasks</span></li>';
+    }
+    return;
+  }
+
+  if (sidebarTitle) sidebarTitle.textContent = '日历';
   state.calendars.forEach(calendar => {
     const hidden = !state.visibleCalendars.has(calendar.id);
     const li = document.createElement('li');
@@ -184,6 +257,67 @@ function renderSidebar() {
       render();
     };
     list.appendChild(li);
+  });
+}
+
+function renderReminders() {
+  const list = $('remindersListView');
+  const empty = $('remindersEmpty');
+  const tabs = $('reminderListTabs');
+  const activeList = state.reminderLists.find(item => item.id === state.activeReminderList);
+
+  $('remindersKicker').textContent = activeList ? displayReminderListName(activeList) : '所有列表';
+  $('remindersTitle').textContent = '提醒事项';
+  renderReminderTabs(tabs);
+
+  const reminders = state.reminders
+    .filter(reminder => !state.activeReminderList || reminder.list_id === state.activeReminderList)
+    .sort((a, b) => {
+    const done = Number(a.completed || 0) - Number(b.completed || 0);
+    if (done) return done;
+    return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'));
+  });
+
+  list.innerHTML = '';
+  empty.classList.toggle('show', reminders.length === 0);
+  reminders.forEach(reminder => {
+    const li = document.createElement('li');
+    const completed = Boolean(Number(reminder.completed));
+    li.className = `reminder-row ${completed ? 'completed' : ''}`;
+    li.innerHTML = `
+      <button class="reminder-check" type="button" aria-label="${completed ? '标记未完成' : '标记完成'}">${completed ? '✓' : ''}</button>
+      <div class="reminder-main">
+        <div class="reminder-title">${esc(reminder.title || '未命名提醒')}</div>
+        <div class="reminder-meta">
+          ${reminder.due_date ? `<span>${formatReminderDue(reminder.due_date)}</span>` : '<span>无截止时间</span>'}
+          <span>${esc(displayReminderListName(reminderListOf(reminder)))}</span>
+        </div>
+        ${reminder.notes ? `<div class="reminder-notes">${esc(reminder.notes)}</div>` : ''}
+      </div>
+      <button class="reminder-delete" type="button" aria-label="删除提醒">删除</button>
+    `;
+    li.querySelector('.reminder-check').onclick = () => toggleReminder(reminder);
+    li.querySelector('.reminder-delete').onclick = () => deleteReminderItem(reminder);
+    list.appendChild(li);
+  });
+}
+
+function renderReminderTabs(tabs) {
+  const allCount = state.reminders.length;
+  const buttons = [
+    `<button class="${state.activeReminderList ? '' : 'active'}" data-list="">全部 <span>${allCount}</span></button>`,
+    ...state.reminderLists.map(item => {
+      const count = state.reminders.filter(reminder => reminder.list_id === item.id).length;
+      return `<button class="${state.activeReminderList === item.id ? 'active' : ''}" data-list="${escAttr(item.id)}">${esc(displayReminderListName(item))} <span>${count}</span></button>`;
+    }),
+  ];
+  tabs.innerHTML = buttons.join('');
+  tabs.querySelectorAll('button').forEach(button => {
+    button.onclick = async () => {
+      state.activeReminderList = button.dataset.list || '';
+      await loadReminders();
+      render();
+    };
   });
 }
 
@@ -752,6 +886,97 @@ function eventsOn(dateStr) {
     .sort((a, b) => minutesOf(a.start_time) - minutesOf(b.start_time));
 }
 
+async function loadReminderLists() {
+  try {
+    state.reminderLists = await api('GET', '/api/reminder-lists');
+  } catch (err) {
+    state.reminderLists = [];
+  }
+
+  if (state.activeReminderList && !state.reminderLists.some(item => item.id === state.activeReminderList)) {
+    state.activeReminderList = '';
+  }
+}
+
+async function loadReminders() {
+  try {
+    state.reminders = await api('GET', '/api/reminders?completed=true');
+  } catch (err) {
+    state.reminders = [];
+  }
+}
+
+function focusNewReminder() {
+  if (state.mode !== 'reminders') {
+    switchMode('reminders').then(() => $('newReminderTitle')?.focus());
+    return;
+  }
+  $('newReminderTitle')?.focus();
+}
+
+async function createReminderFromForm(event) {
+  event.preventDefault();
+  const titleInput = $('newReminderTitle');
+  const dueInput = $('newReminderDue');
+  const title = titleInput.value.trim();
+  if (!title) {
+    toast('提醒标题不能为空');
+    titleInput.focus();
+    return;
+  }
+
+  const listId = state.activeReminderList || state.reminderLists[0]?.id || '';
+  const dueDate = dueInput.value ? `${dueInput.value.length === 16 ? dueInput.value + ':00' : dueInput.value}` : '';
+  try {
+    const response = await api('POST', '/api/reminders', {
+      title,
+      due_date: dueDate,
+      notes: '',
+      priority: 1,
+      list_id: listId,
+    });
+    state.reminders.push({
+      id: response.id,
+      list_id: listId,
+      title,
+      notes: '',
+      due_date: dueDate,
+      completed: 0,
+      priority: 1,
+      source: 'outlook',
+    });
+    titleInput.value = '';
+    dueInput.value = '';
+    render();
+    toast('提醒已添加');
+  } catch (err) {
+    toast('添加失败，请确认 Outlook 正在运行');
+  }
+}
+
+async function toggleReminder(reminder) {
+  const completed = !Number(reminder.completed);
+  try {
+    await api('POST', `/api/reminders/${encodeURIComponent(reminder.id)}/complete`, { completed });
+    state.reminders = state.reminders.map(item => item.id === reminder.id ? { ...item, completed: completed ? 1 : 0 } : item);
+    render();
+  } catch (err) {
+    toast('更新提醒失败');
+  }
+}
+
+async function deleteReminderItem(reminder) {
+  if (!confirm(`删除「${reminder.title || '未命名提醒'}」？`)) return;
+  try {
+    await api('DELETE', `/api/reminders/${encodeURIComponent(reminder.id)}`);
+    state.reminders = state.reminders.filter(item => item.id !== reminder.id);
+    render();
+    toast('提醒已删除');
+  } catch (err) {
+    toast('删除失败，请确认 Outlook 正在运行');
+  }
+}
+
 async function loadCalendars() {
   try {
     const calendars = await api('GET', '/api/calendars');
@@ -842,6 +1067,31 @@ function displayCalendarName(calendar) {
   if (name.includes('个人')) return '个人';
   if (name.includes('工作')) return '工作';
   return name.replace(/\s*\(.*?\)\s*/g, '') || '工作';
+}
+
+function reminderListOf(reminder) {
+  return state.reminderLists.find(item => item.id === reminder.list_id) || state.reminderLists[0] || {};
+}
+
+function displayReminderListName(reminderList) {
+  if (!reminderList) return 'Outlook Tasks';
+  const name = reminderList.name || '';
+  if (name.includes('任务') || name.toLowerCase().includes('task')) return 'Outlook Tasks';
+  if (name.includes('提醒')) return '提醒事项';
+  return name.replace(/\s*\(.*?\)\s*/g, '') || 'Outlook Tasks';
+}
+
+function formatReminderDue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 16);
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 function colorBg(hex, alpha) {

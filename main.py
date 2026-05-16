@@ -197,7 +197,7 @@ def api_delete_reminder(reminder_id):
                             (reminder_id,)).fetchone()
         conn.close()
         if row:
-            delete_reminder_remote(row['list_id'], reminder_id)
+            delete_reminder_remote(reminder_id)
         delete_reminder(reminder_id)
         return jsonify({'ok': True})
     except Exception as e:
