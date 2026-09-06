@@ -45,7 +45,7 @@ iPhone 通过 Microsoft Exchange 账号将日历和提醒事项同步到 Outlook
 
 ## 🚀 快速开始
 
-### 1. 克隆项目
+### 1. 克隆项目!
 
 ```bash
 git clone https://github.com/sinuosun/icloud_reminder_sync.git
